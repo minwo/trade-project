@@ -1,13 +1,17 @@
 import feedparser
+import html
 import json
 import os
 import pathlib
+import re
 import urllib.parse
 
 import requests
 
 TOKEN = os.environ["TELEGRAM_BOT_TOKEN"]
 CHAT_ID = os.environ["TELEGRAM_CHAT_ID"]
+NAVER_CLIENT_ID = os.environ.get("NAVER_CLIENT_ID")
+NAVER_CLIENT_SECRET = os.environ.get("NAVER_CLIENT_SECRET")
 
 BASE_DIR = pathlib.Path(__file__).parent
 KEYWORDS_FILE = BASE_DIR / "keywords.txt"
@@ -41,15 +45,41 @@ def send_telegram(text):
     resp.raise_for_status()
 
 
-def check_keyword(keyword, seen):
+def clean_html(text):
+    return html.unescape(re.sub(r"<[^>]+>", "", text))
+
+
+def fetch_google_news(keyword):
     url = f"https://news.google.com/rss/search?q={urllib.parse.quote(keyword)}&hl=ko&gl=KR&ceid=KR:ko"
     feed = feedparser.parse(url)
+    return [(entry.title, entry.link) for entry in feed.entries[:10]]
+
+
+def fetch_naver_news(keyword):
+    if not (NAVER_CLIENT_ID and NAVER_CLIENT_SECRET):
+        return []
+    resp = requests.get(
+        "https://openapi.naver.com/v1/search/news.json",
+        params={"query": keyword, "display": 10, "sort": "date"},
+        headers={
+            "X-Naver-Client-Id": NAVER_CLIENT_ID,
+            "X-Naver-Client-Secret": NAVER_CLIENT_SECRET,
+        },
+        timeout=10,
+    )
+    resp.raise_for_status()
+    items = resp.json().get("items", [])
+    return [(clean_html(item["title"]), item["originallink"] or item["link"]) for item in items]
+
+
+def check_keyword(keyword, seen):
+    articles = fetch_google_news(keyword) + fetch_naver_news(keyword)
     new_count = 0
-    for entry in feed.entries[:10]:
-        if entry.link in seen:
+    for title, link in articles:
+        if link in seen:
             continue
-        send_telegram(f"[{keyword}] {entry.title}\n{entry.link}")
-        seen.add(entry.link)
+        send_telegram(f"[{keyword}] {title}\n{link}")
+        seen.add(link)
         new_count += 1
     return new_count
 
