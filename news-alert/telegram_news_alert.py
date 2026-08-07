@@ -15,15 +15,28 @@ NAVER_CLIENT_SECRET = os.environ.get("NAVER_CLIENT_SECRET")
 
 BASE_DIR = pathlib.Path(__file__).parent
 KEYWORDS_FILE = BASE_DIR / "keywords.txt"
+TRIGGERS_FILE = BASE_DIR / "importance_triggers.txt"
 SEEN_FILE = BASE_DIR / "seen_titles.json"
 
 
-def load_keywords():
+def load_lines(path):
     return [
         line.strip()
-        for line in KEYWORDS_FILE.read_text(encoding="utf-8").splitlines()
+        for line in path.read_text(encoding="utf-8").splitlines()
         if line.strip() and not line.startswith("#")
     ]
+
+
+def load_keywords():
+    return load_lines(KEYWORDS_FILE)
+
+
+def load_triggers():
+    return load_lines(TRIGGERS_FILE)
+
+
+def is_important(title, triggers):
+    return any(trigger in title for trigger in triggers)
 
 
 def load_seen():
@@ -86,12 +99,15 @@ def gather_articles(keywords):
 
 def main():
     keywords = load_keywords()
+    triggers = load_triggers()
     seen = load_seen()
     sent_this_run = set()
     new_count = 0
     for keyword, title, link in gather_articles(keywords):
         key = normalize_title(title)
         if key in seen or key in sent_this_run:
+            continue
+        if not is_important(title, triggers):
             continue
         send_telegram(f"[{keyword}] {title}\n{link}")
         seen.add(key)
