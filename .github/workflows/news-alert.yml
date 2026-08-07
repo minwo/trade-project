@@ -27,13 +27,13 @@ jobs:
           NAVER_CLIENT_ID: ${{ secrets.NAVER_CLIENT_ID }}
           NAVER_CLIENT_SECRET: ${{ secrets.NAVER_CLIENT_SECRET }}
 
-      - name: commit seen_links.json
+      - name: commit seen_titles.json
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add news-alert/seen_links.json
+          git add news-alert/seen_titles.json
           if ! git diff --cached --quiet; then
-            git commit -m "chore: update seen_links.json"
+            git commit -m "chore: update seen_titles.json"
             git pull --rebase origin main
             git push
           fi

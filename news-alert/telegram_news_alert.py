@@ -15,7 +15,7 @@ NAVER_CLIENT_SECRET = os.environ.get("NAVER_CLIENT_SECRET")
 
 BASE_DIR = pathlib.Path(__file__).parent
 KEYWORDS_FILE = BASE_DIR / "keywords.txt"
-SEEN_FILE = BASE_DIR / "seen_links.json"
+SEEN_FILE = BASE_DIR / "seen_titles.json"
 
 
 def load_keywords():
@@ -49,6 +49,12 @@ def clean_html(text):
     return html.unescape(re.sub(r"<[^>]+>", "", text))
 
 
+def normalize_title(title):
+    t = re.sub(r"\s+", " ", title).strip()
+    t = re.sub(r"\s*[-|·]\s*[^-|·]{1,20}$", "", t)  # 끝의 " - 언론사명" 류 제거
+    return t.lower()
+
+
 def fetch_google_news(keyword):
     url = f"https://news.google.com/rss/search?q={urllib.parse.quote(keyword)}&hl=ko&gl=KR&ceid=KR:ko"
     feed = feedparser.parse(url)
@@ -72,26 +78,27 @@ def fetch_naver_news(keyword):
     return [(clean_html(item["title"]), item["originallink"] or item["link"]) for item in items]
 
 
-def check_keyword(keyword, seen):
-    articles = fetch_google_news(keyword) + fetch_naver_news(keyword)
-    new_count = 0
-    for title, link in articles:
-        if link in seen:
-            continue
-        send_telegram(f"[{keyword}] {title}\n{link}")
-        seen.add(link)
-        new_count += 1
-    return new_count
+def gather_articles(keywords):
+    for keyword in keywords:
+        for title, link in fetch_google_news(keyword) + fetch_naver_news(keyword):
+            yield keyword, title, link
 
 
 def main():
     keywords = load_keywords()
     seen = load_seen()
-    total_new = 0
-    for kw in keywords:
-        total_new += check_keyword(kw, seen)
+    sent_this_run = set()
+    new_count = 0
+    for keyword, title, link in gather_articles(keywords):
+        key = normalize_title(title)
+        if key in seen or key in sent_this_run:
+            continue
+        send_telegram(f"[{keyword}] {title}\n{link}")
+        seen.add(key)
+        sent_this_run.add(key)
+        new_count += 1
     save_seen(seen)
-    print(f"checked {len(keywords)} keywords, sent {total_new} new articles")
+    print(f"checked {len(keywords)} keywords, sent {new_count} new articles")
 
 
 if __name__ == "__main__":
