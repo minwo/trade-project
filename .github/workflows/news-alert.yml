@@ -31,9 +31,20 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add news-alert/seen_titles.json
-          if ! git diff --cached --quiet; then
+
+          cp news-alert/seen_titles.json /tmp/local_seen.json
+
+          for attempt in 1 2 3; do
+            git fetch origin main
+            git reset --hard origin/main
+            python news-alert/merge_seen.py /tmp/local_seen.json
+            git add news-alert/seen_titles.json
+            if git diff --cached --quiet; then
+              break
+            fi
             git commit -m "chore: update seen_titles.json"
-            git pull --rebase origin main
-            git push
-          fi
+            if git push; then
+              break
+            fi
+            echo "push failed, retrying ($attempt)"
+          done
