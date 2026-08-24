@@ -71,11 +71,14 @@ def normalize_title(title):
 def fetch_google_news(keyword):
     url = f"https://news.google.com/rss/search?q={urllib.parse.quote(keyword)}&hl=ko&gl=KR&ceid=KR:ko"
     feed = feedparser.parse(url)
-    return [(entry.title, entry.link) for entry in feed.entries[:10]]
+    results = [(entry.title, entry.link) for entry in feed.entries[:10]]
+    print(f"  google[{keyword}]: {len(results)}건")
+    return results
 
 
 def fetch_naver_news(keyword):
     if not (NAVER_CLIENT_ID and NAVER_CLIENT_SECRET):
+        print(f"  naver[{keyword}]: skipped (NAVER_CLIENT_ID/SECRET not set)")
         return []
     resp = requests.get(
         "https://openapi.naver.com/v1/search/news.json",
@@ -88,7 +91,9 @@ def fetch_naver_news(keyword):
     )
     resp.raise_for_status()
     items = resp.json().get("items", [])
-    return [(clean_html(item["title"]), item["originallink"] or item["link"]) for item in items]
+    results = [(clean_html(item["title"]), item["originallink"] or item["link"]) for item in items]
+    print(f"  naver[{keyword}]: {len(results)}건")
+    return results
 
 
 def gather_articles(keywords):
@@ -98,6 +103,7 @@ def gather_articles(keywords):
 
 
 def main():
+    print(f"naver configured: {bool(NAVER_CLIENT_ID and NAVER_CLIENT_SECRET)}")
     keywords = load_keywords()
     triggers = load_triggers()
     seen = load_seen()
